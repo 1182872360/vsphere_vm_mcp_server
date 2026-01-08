@@ -774,42 +774,28 @@ async def lifespan(app) -> AsyncGenerator[None, None]:
 # =============================================================================
 # FastMCP 实例创建和服务器运行
 # =============================================================================
-def create_mcp_server() -> FastMCP:
-    """创建 FastMCP 服务器实例"""
-    if not MCP_AVAILABLE:
-        raise RuntimeError("MCP 库未安装，请运行: pip install mcp")
-
-    mcp = FastMCP(
-        "vSphereVMAssistant",
-        lifespan=lifespan,
-        instructions=(
-            "vSphere 虚拟机管理助手，提供虚拟机创建、查询等功能。\\n\\n"
-            "**工具使用指南**:\\n"
-            "1. 查询资源: 使用 describe* 工具获取可用的模板、主机、集群等\\n"
-            "2. 创建虚拟机: 使用 createVMFromTemplate 从模板创建虚拟机\\n"
-            "3. 查询虚拟机: 使用 describeVMs 查看已创建的虚拟机\\n\\n"
-            "**创建流程**:\\n"
-            "- describeTemplates -> 选择模板\\n"
-            "- describeClusters -> 选择集群\\n"
-            "- createVMFromTemplate -> 创建虚拟机\\n\\n"
-            "**错误处理**: 所有工具返回统一的 MCPResult 格式，失败时包含错误类型、建议和相关工具推荐。"
-        ),
-        host=os.getenv("SERVER_HOST", "0.0.0.0"),
-        port=int(os.getenv("SERVER_PORT", "8000")),
-    )
-
-    return mcp
-
-
-# =============================================================================
-# 全局 MCP 实例 - 供 uv run mcp dev 使用
-# =============================================================================
-mcp = create_mcp_server()
+mcp = FastMCP(
+    "vSphereVMAssistant",
+    lifespan=lifespan,
+    instructions=(
+        "vSphere 虚拟机管理助手，提供虚拟机创建、查询等功能。\n\n"
+        "**工具使用指南**:\n"
+        "1. 查询资源: 使用 describe* 工具获取可用的模板、主机、集群等\n"
+        "2. 创建虚拟机: 使用 createVMFromTemplate 从模板创建虚拟机\n"
+        "3. 查询虚拟机: 使用 describeVMs 查看已创建的虚拟机\n\n"
+        "**创建流程**:\n"
+        "- describeTemplates -> 选择模板\n"
+        "- describeClusters -> 选择集群\n"
+        "- createVMFromTemplate -> 创建虚拟机\n\n"
+        "**错误处理**: 所有工具返回统一的 MCPResult 格式，失败时包含错误类型、建议和相关工具推荐。"
+    ),
+    host=os.getenv("SERVER_HOST", "0.0.0.0"),
+    port=int(os.getenv("SERVER_PORT", "8000"))
+)
 
 
 def run_server():
     """运行 MCP 服务器"""
-    # 配置日志
     log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
         level=getattr(logging, log_level_str, logging.INFO),
@@ -822,28 +808,11 @@ def run_server():
     if not PYVMOMI_AVAILABLE:
         logger.warning("pyvmomi 未安装，部分功能将不可用。请运行: pip install pyvmomi")
 
-    # 创建并运行服务器
-    mcp = create_mcp_server()
     transport = os.getenv('SERVER_TRANSPORT', 'stdio')
     logger.info(f"使用传输协议: {transport}")
 
     mcp.run(transport=transport)
 
 
-# =============================================================================
-# 主入口
-# =============================================================================
-def main():
-    """主入口函数"""
-    try:
-        run_server()
-    except KeyboardInterrupt:
-        logger.info("服务器被用户中断")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"服务器启动失败: {e}")
-        sys.exit(1)
-
-
 if __name__ == "__main__":
-    main()
+    run_server()
