@@ -13,6 +13,7 @@ vSphere VM MCP Server - 虚拟机创建模块
 
 import os
 import re
+import sys
 import logging
 from enum import Enum
 from contextlib import asynccontextmanager
@@ -798,6 +799,12 @@ def create_mcp_server() -> FastMCP:
     )
 
     return mcp
+
+
+# =============================================================================
+# 全局 MCP 实例 - 供 uv run mcp dev 使用
+# =============================================================================
+mcp = create_mcp_server()
 
 
 def run_server():
