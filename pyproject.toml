@@ -1,5 +1,5 @@
 [project]
-name = "vsphere-vm-mcp-server"
+name = "vsphere_vm_mcp_server"
 version = "0.1.0"
 description = "vSphere VM MCP Server - 基于最佳实践的 vSphere 虚拟机创建 MCP 服务器"
 readme = "README.md"
@@ -12,5 +12,5 @@ dependencies = [
 ]
 
 [project.scripts]
-vsphere-vm-mcp-server = "main:run_server"
+vsphere_vm_mcp_server = "main:run_server"
 
