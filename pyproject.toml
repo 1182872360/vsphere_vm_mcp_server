@@ -1,0 +1,19 @@
+[project]
+name = "vsphere-vm-mcp-server"
+version = "0.1.0"
+description = "vSphere VM MCP Server - 基于最佳实践的 vSphere 虚拟机创建 MCP 服务器"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+    "mcp[cli]>=1.25.0",
+    "pydantic>=2.12.5",
+    "pyvmomi>=8.0.0",
+]
+
+[project.scripts]
+vsphere-vm-mcp-server = "main:run_server"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
