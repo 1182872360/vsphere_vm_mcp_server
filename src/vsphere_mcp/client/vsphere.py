@@ -687,7 +687,7 @@ class VSphereClient:
             # 2. 检查电源状态 (必须关机)
             if vm.runtime.powerState != vim.VirtualMachine.PowerState.poweredOff:
                 return None, MCPError(
-                    ErrorType.INVALID_OPERATION, 
+                    ErrorType.PRECONDITION_FAILED, 
                     f"VM '{vm_name}' is currently {vm.runtime.powerState}. It must be powered off to reconfigure.",
                     suggestion="Please power off the VM first. You can use 'getVMPowerState' to check the status."
                 )
