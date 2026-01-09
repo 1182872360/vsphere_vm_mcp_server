@@ -351,6 +351,24 @@ class VSphereClient:
                 if vm.runtime and vm.runtime.host:
                     host_name = vm.runtime.host.name
                 
+                # 获取 Guest Info
+                guest_hostname = None
+                ip_address = None
+                networks = []
+                if vm.guest:
+                    guest_hostname = vm.guest.hostName
+                    ip_address = vm.guest.ipAddress
+                
+                if vm.network:
+                    networks = [net.name for net in vm.network]
+
+                # 计算总磁盘大小
+                total_disk_gb = 0.0
+                if vm.config and vm.config.hardware:
+                    for device in vm.config.hardware.device:
+                        if isinstance(device, vim.vm.device.VirtualDisk):
+                            total_disk_gb += device.capacityInKB / (1024 * 1024)
+                
                 # 获取文件夹路径
                 folder_path = None
                 if vm.parent:
@@ -365,7 +383,11 @@ class VSphereClient:
                     memory_mb=vm.config.hardware.memoryMB if vm.config and vm.config.hardware else None,
                     host_name=host_name,
                     cluster_name=vm_cluster.name if vm_cluster else None,
-                    folder_path=folder_path
+                    folder_path=folder_path,
+                    guest_hostname=guest_hostname,
+                    ip_address=ip_address,
+                    total_disk_gb=round(total_disk_gb, 2) if total_disk_gb > 0 else None,
+                    networks=networks
                 ))
             except Exception as e:
                 logger.warning(f"获取虚拟机 {vm.name} 信息失败: {e}")

@@ -21,9 +21,13 @@ class VMInfo(MyBaseModel):
     guest_os: Optional[str] = Field(description="客户操作系统", default=None)
     num_cpu: Optional[int] = Field(description="CPU 核数", default=None)
     memory_mb: Optional[int] = Field(description="内存大小 (MB)", default=None)
-    host_name: Optional[str] = Field(description="所在主机", default=None)
+    host_name: Optional[str] = Field(description="所在宿主机 (ESXi)", default=None)
     cluster_name: Optional[str] = Field(description="所在集群", default=None)
     folder_path: Optional[str] = Field(description="文件夹路径", default=None)
+    guest_hostname: Optional[str] = Field(description="客户机主机名", default=None)
+    ip_address: Optional[str] = Field(description="IP 地址 (Main)", default=None)
+    total_disk_gb: Optional[float] = Field(description="总磁盘大小 (GB)", default=None)
+    networks: Optional[List[str]] = Field(description="连接的网络", default=None)
 
 
 class VMTemplateInfo(MyBaseModel):
