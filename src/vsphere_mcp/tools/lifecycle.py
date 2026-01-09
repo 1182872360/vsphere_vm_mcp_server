@@ -30,18 +30,28 @@ async def create_vm_from_template(
     memory_mb: Optional[int] = Field(default=None, description="内存大小 (MB)，覆盖模板设置"),
     network_name: Optional[str] = Field(default=None, description="网络名称，覆盖模板默认网络"),
     folder_name: Optional[str] = Field(default=None, description="文件夹名称"),
-    resource_pool_name: Optional[str] = Field(default=None, description="资源池名称")
+    resource_pool_name: Optional[str] = Field(default=None, description="资源池名称"),
+    # Advanced Customization
+    ip_address: Optional[str] = Field(default=None, description="静态 IP 地址 (不填则默认 DHCP)"),
+    subnet_mask: Optional[str] = Field(default=None, description="子网掩码 (默认 255.255.255.0)"),
+    gateway: Optional[str] = Field(default=None, description="默认网关"),
+    dns_servers: Optional[list[str]] = Field(default=None, description="DNS 服务器列表"),
+    hostname: Optional[str] = Field(default=None, description="主机名 (不填则使用虚拟机名称)"),
+    password: Optional[str] = Field(default=None, description="操作系统管理员/Root 密码"),
+    domain: Optional[str] = Field(default=None, description="域名 (Linux) 或加入的域 (Windows)")
 ) -> MCPResult:
     """
-    从模板创建虚拟机
+    从模板创建虚拟机 (支持自定义 CPU、内存、网络及 Guest OS 配置)
 
     注意：创建虚拟机前，请确保已准备好以下资源：
     1. 虚拟机名称 (vm_name) - 必须唯一
     2. 模板名称 (template_name) - 可通过 describeTemplates 查询
     3. 集群名称 (cluster_name) - 可通过 describeClusters 查询
-    4. 可选：CPU/内存配置
-    5. 可选：网络配置 (network_name) - 可通过 describeNetworks 查询
-    6. 可选：文件夹和资源池
+    
+    高级自定义 (Guest Customization):
+    - 如果提供 `ip_address`，则配置静态 IP (推荐同时提供 subnet/gateway)。
+    - 如果提供 `password`，将设置为系统管理员/Root 密码。
+    - 自定义过程发生在首次启动时，可能需要几分钟。
     """
     # 参数验证链
     if error := validate_vm_name(vm_name):
@@ -73,7 +83,15 @@ async def create_vm_from_template(
         resource_pool_name=resource_pool_name,
         network_name=network_name,
         cpu=cpu,
-        memory_mb=memory_mb
+        memory_mb=memory_mb,
+        # Customization
+        ip_address=ip_address,
+        subnet_mask=subnet_mask,
+        gateway=gateway,
+        dns_servers=dns_servers,
+        hostname=hostname,
+        password=password,
+        domain=domain
     )
     
     if error:
@@ -96,6 +114,11 @@ async def create_vm_from_template(
     
     if network_name:
         result_data["details"]["network"] = network_name
+    
+    if any([ip_address, hostname, password]):
+        result_data["details"]["customization"] = "enabled"
+        if ip_address:
+             result_data["details"]["ip"] = ip_address
     
     return MCPResult(
         success=True,

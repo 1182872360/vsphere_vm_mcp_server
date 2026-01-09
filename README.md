@@ -61,7 +61,7 @@ LOG_LEVEL=DEBUG SERVER_PORT=9000 uv run vsphere-vm-mcp-server
 
 | 工具名称 | 描述 | 必需参数 | 可选参数 |
 |---------|------|----------|----------|
-| `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `network_name`, `folder_name`, `resource_pool_name` |
+| `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `network_name`, `folder_name`, `resource_pool_name`, `(Customization)`, `ip_address`, `password` |
 | `reconfigureVM` | 重新配置虚拟机 | `vm_name` | `cpu`, `memory_mb`, `disk_size_gb`, `network_name` |
 
 ## 📦 项目结构

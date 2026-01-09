@@ -382,7 +382,15 @@ class VSphereClient:
         resource_pool_name: Optional[str] = None,
         network_name: Optional[str] = None,
         cpu: Optional[int] = None,
-        memory_mb: Optional[int] = None
+        memory_mb: Optional[int] = None,
+        # Customization Params
+        ip_address: Optional[str] = None,
+        subnet_mask: Optional[str] = None,
+        gateway: Optional[str] = None,
+        dns_servers: Optional[List[str]] = None,
+        hostname: Optional[str] = None,
+        password: Optional[str] = None, # root/admin password
+        domain: Optional[str] = None
     ) -> Tuple[Optional[str], Optional[MCPError]]:
         """从模板克隆虚拟机"""
         try:
@@ -445,12 +453,13 @@ class VSphereClient:
             
             clone_spec = vim.vm.CloneSpec()
             clone_spec.location = relocate_spec
-            clone_spec.powerOn = False
+            clone_spec.powerOn = True # Default to power on to apply customization
             clone_spec.template = False
             
             # 配置规格 (ConfigSpec)
             config_spec = vim.vm.ConfigSpec()
             config_changes = False
+            device_changes = []
 
             # 配置 CPU 和内存
             if cpu:
@@ -460,11 +469,11 @@ class VSphereClient:
                 config_spec.memoryMB = memory_mb
                 config_changes = True
 
-            # 配置网络
+            # 配置网络连接 (Device Change)
             if network_name:
                 network_spec = self._create_network_spec(template, network_name)
                 if network_spec:
-                    config_spec.deviceChange = [network_spec]
+                    device_changes.append(network_spec)
                     config_changes = True
                 else:
                     return None, MCPError(
@@ -474,10 +483,31 @@ class VSphereClient:
                         suggestion="请使用 describeNetworks 查询可用网络",
                         related_tools=[TOOL_DESCRIBE_NETWORKS]
                     )
-
+            
             if config_changes:
+                if device_changes:
+                    config_spec.deviceChange = device_changes
                 clone_spec.config = config_spec
             
+            # 客户机自定义 (Customization Spec)
+            if any([ip_address, hostname, password, domain]):
+                # Guest OS Detection
+                is_windows = "win" in template.config.guestId.lower()
+                
+                customization_spec = self._create_customization_spec(
+                    is_windows=is_windows,
+                    hostname=hostname or vm_name,
+                    domain=domain,
+                    ip_address=ip_address,
+                    subnet_mask=subnet_mask,
+                    gateway=gateway,
+                    dns_servers=dns_servers,
+                    password=password
+                )
+                
+                if customization_spec:
+                    clone_spec.customization = customization_spec
+
             # 执行克隆
             task = template.Clone(folder=folder, name=vm_name, spec=clone_spec)
             
@@ -485,6 +515,97 @@ class VSphereClient:
             
         except Exception as e:
             return None, parse_vsphere_error(e, "clone_vm")
+
+    def _create_customization_spec(
+        self,
+        is_windows: bool,
+        hostname: str,
+        domain: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        subnet_mask: Optional[str] = None,
+        gateway: Optional[str] = None,
+        dns_servers: Optional[List[str]] = None,
+        password: Optional[str] = None
+    ) -> Optional[vim.vm.customization.Specification]:
+        """创建 Guest Customization Specification"""
+        
+        spec = vim.vm.customization.Specification()
+        
+        # 1. Global IP Settings
+        spec.globalIPSettings = vim.vm.customization.GlobalIPSettings()
+        if dns_servers:
+            spec.globalIPSettings.dnsServerList = dns_servers
+        if domain:
+            spec.globalIPSettings.dnsSuffixList = [domain]
+            
+        # 2. Identity (Linux or Windows)
+        if is_windows:
+            identity = vim.vm.customization.Sysprep()
+            
+            # UserData
+            identity.userData = vim.vm.customization.UserData()
+            identity.userData.fullName = "Administrator"
+            identity.userData.orgName = "Organization"
+            identity.userData.computerName = vim.vm.customization.FixedName()
+            identity.userData.computerName.name = hostname
+            identity.userData.productId = "" # Windows 许可证密钥
+
+            # GuiUnattended (Password)
+            identity.guiUnattended = vim.vm.customization.GuiUnattended()
+            if password:
+                identity.guiUnattended.password = vim.vm.customization.Password()
+                identity.guiUnattended.password.value = password
+                identity.guiUnattended.password.plainText = True
+            else:
+                 # 必须设置，否则 Sysprep 可能失败。
+                 identity.guiUnattended.password = None 
+            
+            identity.guiUnattended.timeZone = 210 # China Standard Time
+            identity.guiUnattended.autoLogon = True
+            identity.guiUnattended.autoLogonCount = 1
+            
+            # Identification (Workgroup/Domain)
+            identity.identification = vim.vm.customization.Identification()
+            if domain:
+                identity.identification.joinDomain = domain
+                identity.identification.domainAdmin = "Administrator" # 简化：假设域管理员
+                if password:
+                    identity.identification.domainAdminPassword = vim.vm.customization.Password()
+                    identity.identification.domainAdminPassword.value = password
+                    identity.identification.domainAdminPassword.plainText = True
+            else:
+                identity.identification.joinWorkgroup = "WORKGROUP"
+            
+            spec.identity = identity
+            
+        else: # Linux
+            identity = vim.vm.customization.LinuxPrep()
+            identity.domain = domain or "localdomain"
+            identity.hostName = vim.vm.customization.FixedName()
+            identity.hostName.name = hostname
+            identity.hwClockUTC = True
+            identity.timeZone = "Asia/Shanghai"
+            
+            spec.identity = identity
+            # Linux root password setting via LinuxPrep is limited/not supported in the same way.
+            # Warning: password argument will be ignored for Linux in standard customization.
+            
+        # 3. NIC Setting (IP)
+        adapter_mapping = vim.vm.customization.AdapterMapping()
+        adapter_mapping.adapter = vim.vm.customization.IPSettings()
+        
+        if ip_address:
+            adapter_mapping.adapter.ip = vim.vm.customization.FixedIp()
+            adapter_mapping.adapter.ip.ipAddress = ip_address
+            adapter_mapping.adapter.subnetMask = subnet_mask or "255.255.255.0"
+            if gateway:
+                adapter_mapping.adapter.gateway = [gateway]
+        else:
+            adapter_mapping.adapter.ip = vim.vm.customization.DhcpIp()
+            
+        spec.nicSettingMap = [adapter_mapping]
+        
+        return spec
 
     def get_vm_power_state(self, vm_name: str) -> Tuple[Optional[str], Optional[MCPError]]:
         """获取虚拟机的电源状态"""
