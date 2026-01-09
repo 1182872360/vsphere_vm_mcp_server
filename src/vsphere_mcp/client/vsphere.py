@@ -65,7 +65,7 @@ class VSphereClient:
                 user=self.username,
                 pwd=self.password,
                 port=self.port,
-                disableSslCertVerification=True
+                disableSslCertValidation=True
             )
             return None
 
