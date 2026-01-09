@@ -14,6 +14,7 @@ from ..utils import (
     validate_vm_name,
     validate_template_name,
     validate_cluster_name,
+    validate_network_name,
     validate_cpu_memory,
 )
 
@@ -27,6 +28,7 @@ async def create_vm_from_template(
     cluster_name: str = Field(description="集群名称"),
     cpu: Optional[int] = Field(default=None, description="CPU 核数，覆盖模板设置"),
     memory_mb: Optional[int] = Field(default=None, description="内存大小 (MB)，覆盖模板设置"),
+    network_name: Optional[str] = Field(default=None, description="网络名称，覆盖模板默认网络"),
     folder_name: Optional[str] = Field(default=None, description="文件夹名称"),
     resource_pool_name: Optional[str] = Field(default=None, description="资源池名称")
 ) -> MCPResult:
@@ -38,7 +40,8 @@ async def create_vm_from_template(
     2. 模板名称 (template_name) - 可通过 describeTemplates 查询
     3. 集群名称 (cluster_name) - 可通过 describeClusters 查询
     4. 可选：CPU/内存配置
-    5. 可选：文件夹和资源池
+    5. 可选：网络配置 (network_name) - 可通过 describeNetworks 查询
+    6. 可选：文件夹和资源池
     """
     # 参数验证链
     if error := validate_vm_name(vm_name):
@@ -48,6 +51,9 @@ async def create_vm_from_template(
         return MCPResult(success=False, error=error)
 
     if error := validate_cluster_name(cluster_name):
+        return MCPResult(success=False, error=error)
+        
+    if error := validate_network_name(network_name):
         return MCPResult(success=False, error=error)
 
     if error := validate_cpu_memory(cpu, memory_mb):
@@ -65,6 +71,7 @@ async def create_vm_from_template(
         cluster_name=cluster_name,
         folder_name=folder_name,
         resource_pool_name=resource_pool_name,
+        network_name=network_name,
         cpu=cpu,
         memory_mb=memory_mb
     )
@@ -72,21 +79,26 @@ async def create_vm_from_template(
     if error:
         return MCPResult(success=False, error=error)
     
+    result_data = {
+        "vm_name": vm_name,
+        "status": "creation_started",
+        "message": f"虚拟机 '{vm_name}' 创建请求已提交",
+        "task_id": task_id,
+        "details": {
+            "template": template_name,
+            "cluster": cluster_name,
+            "cpu": cpu,
+            "memory_mb": memory_mb,
+            "folder": folder_name,
+            "resource_pool": resource_pool_name
+        }
+    }
+    
+    if network_name:
+        result_data["details"]["network"] = network_name
+    
     return MCPResult(
         success=True,
-        data={
-            "vm_name": vm_name,
-            "status": "creation_started",
-            "message": f"虚拟机 '{vm_name}' 创建请求已提交",
-            "task_id": task_id,
-            "details": {
-                "template": template_name,
-                "cluster": cluster_name,
-                "cpu": cpu,
-                "memory_mb": memory_mb,
-                "folder": folder_name,
-                "resource_pool": resource_pool_name
-            }
-        },
+        data=result_data,
         request_id=task_id
     )

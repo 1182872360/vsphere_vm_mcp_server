@@ -70,3 +70,10 @@ class ResourcePoolInfo(MyBaseModel):
     resource_pool_id: Optional[str] = Field(description="资源池 ID", default=None)
     cpu_limit: Optional[float] = Field(description="CPU 限制 (GHz)", default=None)
     memory_limit_gb: Optional[float] = Field(description="内存限制 (GB)", default=None)
+
+
+class NetworkInfo(MyBaseModel):
+    """网络信息"""
+    name: Optional[str] = Field(description="网络名称", default=None)
+    network_id: Optional[str] = Field(description="网络 ID", default=None)
+    network_type: Optional[str] = Field(description="网络类型 (Standard/Distributed)", default=None)

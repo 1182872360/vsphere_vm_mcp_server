@@ -9,6 +9,7 @@ from .query import (
     describe_clusters,
     describe_folders,
     describe_resource_pools,
+    describe_networks,
     describe_vms,
 )
 
@@ -23,6 +24,7 @@ __all__ = [
     "describe_clusters",
     "describe_folders",
     "describe_resource_pools",
+    "describe_networks",
     "describe_vms",
     # 生命周期工具
     "create_vm_from_template",

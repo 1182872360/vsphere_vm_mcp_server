@@ -18,6 +18,7 @@ from .vsphere import (
     ClusterInfo,
     FolderInfo,
     ResourcePoolInfo,
+    NetworkInfo,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "ClusterInfo",
     "FolderInfo",
     "ResourcePoolInfo",
+    "NetworkInfo",
 ]

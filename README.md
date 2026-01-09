@@ -53,15 +53,16 @@ LOG_LEVEL=DEBUG SERVER_PORT=9000 uv run vsphere-vm-mcp-server
 | `describeClusters` | 查询集群列表 | 无 |
 | `describeFolders` | 查询文件夹列表 | 无 |
 | `describeResourcePools` | 查询资源池列表 | `cluster_name` (可选) |
+| `describeNetworks` | 查询网络列表 | `cluster_name` (可选) |
 | `describeVMs` | 查询虚拟机列表 | `cluster_name`, `vm_name` (可选) |
 
 ### 生命周期工具
 
 | 工具名称 | 描述 | 必需参数 | 可选参数 |
 |---------|------|----------|----------|
-| `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `folder_name`, `resource_pool_name` |
+| `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `network_name`, `folder_name`, `resource_pool_name` |
 
-## � 项目结构
+## 📦 项目结构
 
 ```
 vsphere_vm_mcp_server/
@@ -73,16 +74,9 @@ vsphere_vm_mcp_server/
     ├── __init__.py            # 包导出
     ├── server.py              # MCP 服务器入口
     ├── models/                # 数据模型
-    │   ├── base.py            # ErrorType, MCPResult, MCPError
-    │   └── vsphere.py         # 业务模型 (VMInfo, ClusterInfo 等)
     ├── client/                # vSphere 客户端
-    │   └── vsphere.py         # VSphereClient + get_vsphere_client
     ├── tools/                 # MCP 工具
-    │   ├── query.py           # 查询类工具
-    │   └── lifecycle.py       # 生命周期工具
     └── utils/                 # 工具函数
-        ├── errors.py          # 错误解析 + 工具建议
-        └── validators.py      # 参数验证
 ```
 
 ## 🔧 环境变量
@@ -97,18 +91,3 @@ vsphere_vm_mcp_server/
 | `SERVER_PORT` | 监听端口 | 8000 | ❌ |
 | `SERVER_TRANSPORT` | 传输协议 | stdio | ❌ |
 | `LOG_LEVEL` | 日志级别 | INFO | ❌ |
-
-## � 最佳实践
-
-详细的 MCP 服务开发最佳实践请参阅 [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)。
-
-## 📋 依赖
-
-- Python >= 3.13
-- mcp[cli] >= 1.25.0
-- pydantic >= 2.12.5
-- pyvmomi >= 8.0.0
-
-## 📄 许可证
-
-MIT License

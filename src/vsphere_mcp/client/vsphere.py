@@ -27,12 +27,14 @@ from ..models import (
     ClusterInfo,
     FolderInfo,
     ResourcePoolInfo,
+    NetworkInfo,
 )
 from ..utils.errors import (
     TOOL_DESCRIBE_TEMPLATES,
     TOOL_DESCRIBE_CLUSTERS,
     TOOL_DESCRIBE_FOLDERS,
     TOOL_DESCRIBE_RESOURCE_POOLS,
+    TOOL_DESCRIBE_NETWORKS,
     parse_vsphere_error,
 )
 
@@ -294,6 +296,36 @@ class VSphereClient:
         
         return pools
 
+    def get_networks(self, cluster_name: Optional[str] = None) -> List[NetworkInfo]:
+        """获取所有网络"""
+        networks = []
+        network_objs = self.get_all_objects(vim.Network)
+        
+        # 添加 DistributedVirtualPortgroup 支持
+        dvs_pgs = self.get_all_objects(vim.dvs.DistributedVirtualPortgroup)
+        all_networks = list(network_objs) + list(dvs_pgs)
+        
+        for net in all_networks:
+            try:
+                # 简单过滤：如果提供了 cluster_name，这里暂时无法直接关联网络和集群
+                # vSphere 中网络通常跨集群，或者是数据中心级别的
+                # 但可以通过检查网络关联的主机来间接过滤，这里为了性能暂不做深度过滤
+                
+                network_type = "Standard"
+                if isinstance(net, vim.dvs.DistributedVirtualPortgroup):
+                    network_type = "Distributed"
+                
+                networks.append(NetworkInfo(
+                    name=net.name,
+                    network_id=net._moId,
+                    network_type=network_type
+                ))
+            except Exception as e:
+                logger.warning(f"获取网络 {net.name} 信息失败: {e}")
+                continue
+        
+        return networks
+
     def get_virtual_machines(self, cluster_name: Optional[str] = None, vm_name_filter: Optional[str] = None) -> List[VMInfo]:
         """获取所有虚拟机（非模板）"""
         vms_info = []
@@ -348,6 +380,7 @@ class VSphereClient:
         cluster_name: str,
         folder_name: Optional[str] = None,
         resource_pool_name: Optional[str] = None,
+        network_name: Optional[str] = None,
         cpu: Optional[int] = None,
         memory_mb: Optional[int] = None
     ) -> Tuple[Optional[str], Optional[MCPError]]:
@@ -415,13 +448,34 @@ class VSphereClient:
             clone_spec.powerOn = False
             clone_spec.template = False
             
+            # 配置规格 (ConfigSpec)
+            config_spec = vim.vm.ConfigSpec()
+            config_changes = False
+
             # 配置 CPU 和内存
-            if cpu or memory_mb:
-                config_spec = vim.vm.ConfigSpec()
-                if cpu:
-                    config_spec.numCPUs = cpu
-                if memory_mb:
-                    config_spec.memoryMB = memory_mb
+            if cpu:
+                config_spec.numCPUs = cpu
+                config_changes = True
+            if memory_mb:
+                config_spec.memoryMB = memory_mb
+                config_changes = True
+
+            # 配置网络
+            if network_name:
+                network_spec = self._create_network_spec(template, network_name)
+                if network_spec:
+                    config_spec.deviceChange = [network_spec]
+                    config_changes = True
+                else:
+                    return None, MCPError(
+                        error_type=ErrorType.RESOURCE_NOT_FOUND,
+                        parameter="network_name",
+                        message=f"网络 '{network_name}' 不存在或配置失败",
+                        suggestion="请使用 describeNetworks 查询可用网络",
+                        related_tools=[TOOL_DESCRIBE_NETWORKS]
+                    )
+
+            if config_changes:
                 clone_spec.config = config_spec
             
             # 执行克隆
@@ -435,6 +489,70 @@ class VSphereClient:
     # =========================================================================
     # 辅助方法
     # =========================================================================
+
+    def _create_network_spec(self, template, network_name: str) -> Optional[vim.vm.device.VirtualDeviceSpec]:
+        """创建网络配置规格"""
+        # 1. 查找目标网络对象
+        content = self.get_content()
+        network = None
+        # 尝试查找标准网络
+        container = content.viewManager.CreateContainerView(content.rootFolder, [vim.Network], True)
+        for net in container.view:
+            if net.name == network_name:
+                network = net
+                break
+        container.Destroy()
+        
+        # 如果不是标准网络，尝试查找分布式端口组
+        if not network:
+            container = content.viewManager.CreateContainerView(content.rootFolder, [vim.dvs.DistributedVirtualPortgroup], True)
+            for pg in container.view:
+                if pg.name == network_name:
+                    network = pg
+                    break
+            container.Destroy()
+            
+        if not network:
+            return None
+
+        # 2. 找到模板中的第一个网卡
+        nic = None
+        for device in template.config.hardware.device:
+            if isinstance(device, vim.vm.device.VirtualEthernetCard):
+                nic = device
+                break
+        
+        if not nic:
+            return None # 模板没有网卡，无法修改
+
+        # 3. 创建设备修改规格
+        nic_spec = vim.vm.device.VirtualDeviceSpec()
+        nic_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+        nic_spec.device = nic
+        
+        # 4. 配置 BackingInfo
+        if isinstance(network, vim.dvs.DistributedVirtualPortgroup):
+            # 分布式交换机
+            dvs_port_connection = vim.dvs.PortConnection()
+            dvs_port_connection.portgroupKey = network.key
+            dvs_port_connection.switchUuid = network.config.distributedVirtualSwitch.uuid
+            
+            nic.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+            nic.backing.port = dvs_port_connection
+        else:
+            # 标准交换机
+            nic.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+            nic.backing.network = network
+            nic.backing.deviceName = network_name
+        
+        # 连接状态
+        nic.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+        nic.connectable.startConnected = True
+        nic.connectable.allowGuestControl = True
+        nic.connectable.connected = True
+        
+        return nic_spec
+
     def _get_vm_cluster(self, vm):
         """获取虚拟机所在的集群"""
         try:

@@ -7,7 +7,7 @@ import re
 from typing import Optional
 
 from ..models import ErrorType, MCPError
-from .errors import TOOL_DESCRIBE_TEMPLATES, TOOL_DESCRIBE_CLUSTERS
+from .errors import TOOL_DESCRIBE_TEMPLATES, TOOL_DESCRIBE_CLUSTERS, TOOL_DESCRIBE_NETWORKS
 
 
 def validate_vm_name(vm_name: Optional[str]) -> Optional[MCPError]:
@@ -63,6 +63,23 @@ def validate_cluster_name(cluster_name: Optional[str]) -> Optional[MCPError]:
             message="缺少必需参数: cluster_name (集群名称)",
             suggestion="请先使用 describeClusters 查询可用集群",
             related_tools=[TOOL_DESCRIBE_CLUSTERS]
+        )
+    return None
+
+
+def validate_network_name(network_name: Optional[str]) -> Optional[MCPError]:
+    """验证网络名称"""
+    if not network_name:
+        # 网络可能是可选的，如果传入空值则通过
+        return None
+        
+    if len(network_name) < 1:
+        return MCPError(
+            error_type=ErrorType.INVALID_PARAMETER,
+            parameter="network_name",
+            message="网络名称不能为空",
+            suggestion="请先使用 describeNetworks 查询可用网络",
+            related_tools=[TOOL_DESCRIBE_NETWORKS]
         )
     return None
 

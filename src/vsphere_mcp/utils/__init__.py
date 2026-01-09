@@ -9,6 +9,7 @@ from .errors import (
     TOOL_DESCRIBE_CLUSTERS,
     TOOL_DESCRIBE_FOLDERS,
     TOOL_DESCRIBE_RESOURCE_POOLS,
+    TOOL_DESCRIBE_NETWORKS,
     parse_vsphere_error,
 )
 
@@ -16,6 +17,7 @@ from .validators import (
     validate_vm_name,
     validate_template_name,
     validate_cluster_name,
+    validate_network_name,
     validate_cpu_memory,
 )
 
@@ -26,10 +28,12 @@ __all__ = [
     "TOOL_DESCRIBE_CLUSTERS",
     "TOOL_DESCRIBE_FOLDERS",
     "TOOL_DESCRIBE_RESOURCE_POOLS",
+    "TOOL_DESCRIBE_NETWORKS",
     "parse_vsphere_error",
     # 验证函数
     "validate_vm_name",
     "validate_template_name",
     "validate_cluster_name",
+    "validate_network_name",
     "validate_cpu_memory",
 ]

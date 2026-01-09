@@ -92,6 +92,22 @@ async def describe_resource_pools(
         return MCPResult(success=False, error=parse_vsphere_error(e, "describe_resource_pools"))
 
 
+async def describe_networks(
+    cluster_name: Optional[str] = Field(default=None, description="集群名称，用于筛选（注：网络通常跨集群，筛选仅供参考）")
+) -> MCPResult:
+    """查询可用的网络列表"""
+    client, error = get_vsphere_client()
+    if error:
+        return MCPResult(success=False, error=error)
+    
+    try:
+        networks = client.get_networks(cluster_name)
+        return MCPResult(success=True, data=networks)
+    except Exception as e:
+        logger.error(f"查询网络列表失败: {e}")
+        return MCPResult(success=False, error=parse_vsphere_error(e, "describe_networks"))
+
+
 async def describe_vms(
     cluster_name: Optional[str] = Field(default=None, description="集群名称，用于筛选"),
     vm_name: Optional[str] = Field(default=None, description="虚拟机名称，支持模糊匹配")

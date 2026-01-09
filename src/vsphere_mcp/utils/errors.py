@@ -47,6 +47,12 @@ TOOL_DESCRIBE_RESOURCE_POOLS = ToolSuggestion(
     example_params={"cluster_name": "Cluster01"}
 )
 
+TOOL_DESCRIBE_NETWORKS = ToolSuggestion(
+    tool_name="describeNetworks",
+    description="查询可用的网络列表",
+    example_params={"cluster_name": "Cluster01"}
+)
+
 
 def parse_vsphere_error(error: Exception, operation: str) -> MCPError:
     """
@@ -99,6 +105,14 @@ def parse_vsphere_error(error: Exception, operation: str) -> MCPError:
                 message="指定的集群不存在",
                 suggestion="请使用 describeClusters 查询可用集群",
                 related_tools=[TOOL_DESCRIBE_CLUSTERS]
+            )
+        elif 'network' in operation.lower():
+            return MCPError(
+                error_type=ErrorType.RESOURCE_NOT_FOUND,
+                parameter="network_name",
+                message="指定的网络不存在",
+                suggestion="请使用 describeNetworks 查询可用网络",
+                related_tools=[TOOL_DESCRIBE_NETWORKS]
             )
 
     # 资源不足
