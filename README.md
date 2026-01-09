@@ -55,12 +55,14 @@ LOG_LEVEL=DEBUG SERVER_PORT=9000 uv run vsphere-vm-mcp-server
 | `describeResourcePools` | 查询资源池列表 | `cluster_name` (可选) |
 | `describeNetworks` | 查询网络列表 | `cluster_name` (可选) |
 | `describeVMs` | 查询虚拟机列表 | `cluster_name`, `vm_name` (可选) |
+| `getVMPowerState` | 查询虚拟机电源状态 | `vm_name` |
 
 ### 生命周期工具
 
 | 工具名称 | 描述 | 必需参数 | 可选参数 |
 |---------|------|----------|----------|
 | `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `network_name`, `folder_name`, `resource_pool_name` |
+| `reconfigureVM` | 重新配置虚拟机 | `vm_name` | `cpu`, `memory_mb`, `disk_size_gb`, `network_name` |
 
 ## 📦 项目结构
 
