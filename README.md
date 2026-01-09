@@ -72,8 +72,10 @@ LOG_LEVEL=DEBUG SERVER_PORT=9000 uv run vsphere-vm-mcp-server
 1. **自动系统识别**：自动根据模板检测 Guest OS 类型 (Windows/Linux)，无需手动指定。
 2. **网络配置**：支持设置静态 IP、子网掩码、网关和 DNS。
 3. **身份配置**：支持设置主机名 (Hostname) 和加入域 (Domain)。
-4. **凭据配置** (仅 Windows)：支持设置 Administrator 密码 (通过 Sysprep)。
-   * *注意：Linux 模板通常需要 Cloud-Init 或其他机制来设置 Root 密码，本工具主要通过 vSphere API 配置网络和主机名。*
+4. **凭据配置**：
+   * **Windows**：直接设置 Administrator 密码 (通过 Sysprep)。
+   * **Linux**：通过 `post-customization` 脚本注入 Root 密码。
+     * *⚠ 重要提示*：Linux 模板必须在 `/etc/vmware-tools/tools.conf` 中开启 `enable-custom-scripts = true`，否则密码设置将失效。
 
 **使用示例**：
 ```json

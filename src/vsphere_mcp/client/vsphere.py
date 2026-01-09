@@ -586,9 +586,18 @@ class VSphereClient:
             identity.hwClockUTC = True
             identity.timeZone = "Asia/Shanghai"
             
+            # Use scriptText for password setting (Post-customization script)
+            # Requires 'enable-custom-scripts' in VMware Tools
+            if password:
+                # Basic script to set root password
+                script = (
+                    "#!/bin/sh\n"
+                    f"echo 'root:{password}' | chpasswd\n"
+                    # Optional: Enhance robustness or logging
+                )
+                identity.scriptText = script
+
             spec.identity = identity
-            # Linux root password setting via LinuxPrep is limited/not supported in the same way.
-            # Warning: password argument will be ignored for Linux in standard customization.
             
         # 3. NIC Setting (IP)
         adapter_mapping = vim.vm.customization.AdapterMapping()
