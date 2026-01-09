@@ -641,12 +641,12 @@ class VSphereClient:
     def get_vm_power_state(self, vm_name: str) -> Tuple[Optional[str], Optional[MCPError]]:
         """获取虚拟机的电源状态"""
         if not self.is_connected():
-            return None, MCPError(ErrorType.CONNECTION_ERROR, "Not connected to vSphere")
+            return None, MCPError(error_type=ErrorType.CONNECTION_ERROR, message="Not connected to vSphere", suggestion="Please connect first")
 
         try:
             vm = self.find_object_by_name(vm_name, vim.VirtualMachine)
             if not vm:
-                return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, f"Virtual machine '{vm_name}' not found")
+                return None, MCPError(error_type=ErrorType.RESOURCE_NOT_FOUND, message=f"Virtual machine '{vm_name}' not found", suggestion="Check VM name")
             
             return str(vm.runtime.powerState), None
         except Exception as e:
@@ -676,19 +676,19 @@ class VSphereClient:
             Tuple[task_id, error_message]
         """
         if not self.is_connected():
-            return None, MCPError(ErrorType.CONNECTION_ERROR, "Not connected to vSphere")
+            return None, MCPError(error_type=ErrorType.CONNECTION_ERROR, message="Not connected to vSphere", suggestion="Please connect first")
 
         try:
             # 1. 查找虚拟机
             vm = self.find_object_by_name(vm_name, vim.VirtualMachine)
             if not vm:
-                return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, f"Virtual machine '{vm_name}' not found")
+                return None, MCPError(error_type=ErrorType.RESOURCE_NOT_FOUND, message=f"Virtual machine '{vm_name}' not found", suggestion="Check VM name")
 
             # 2. 检查电源状态 (必须关机)
             if vm.runtime.powerState != vim.VirtualMachine.PowerState.poweredOff:
                 return None, MCPError(
-                    ErrorType.PRECONDITION_FAILED, 
-                    f"VM '{vm_name}' is currently {vm.runtime.powerState}. It must be powered off to reconfigure.",
+                    error_type=ErrorType.PRECONDITION_FAILED, 
+                    message=f"VM '{vm_name}' is currently {vm.runtime.powerState}. It must be powered off to reconfigure.",
                     suggestion="Please power off the VM first. You can use 'getVMPowerState' to check the status."
                 )
 
@@ -700,20 +700,20 @@ class VSphereClient:
             # CPU & Memory
             if cpu is not None:
                 if cpu <= 0:
-                    return None, MCPError(ErrorType.INVALID_PARAMETER, "CPU count must be positive")
+                    return None, MCPError(error_type=ErrorType.INVALID_PARAMETER, message="CPU count must be positive", suggestion="Provide a value > 0")
                 config_spec.numCPUs = cpu
                 changed = True
             
             if memory_mb is not None:
                 if memory_mb <= 0:
-                    return None, MCPError(ErrorType.INVALID_PARAMETER, "Memory size must be positive")
+                    return None, MCPError(error_type=ErrorType.INVALID_PARAMETER, message="Memory size must be positive", suggestion="Provide a value > 0")
                 config_spec.memoryMB = int(memory_mb)
                 changed = True
 
             # Disk Expansion
             if disk_size_gb is not None:
                 if disk_size_gb <= 0:
-                    return None, MCPError(ErrorType.INVALID_PARAMETER, "Disk size must be positive")
+                    return None, MCPError(error_type=ErrorType.INVALID_PARAMETER, message="Disk size must be positive", suggestion="Provide a value > 0")
                 
                 # 找到第一个磁盘
                 disk = None
@@ -723,13 +723,14 @@ class VSphereClient:
                         break
                 
                 if not disk:
-                     return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, "No virtual disk found on VM to expand")
+                     return None, MCPError(error_type=ErrorType.RESOURCE_NOT_FOUND, message="No virtual disk found on VM to expand", suggestion="Check VM configuration")
                 
                 current_size_gb = disk.capacityInKB / (1024 * 1024)
                 if disk_size_gb < current_size_gb:
                     return None, MCPError(
-                        ErrorType.INVALID_PARAMETER, 
-                        f"Cannot shrink disk (Current: {current_size_gb} GB, Requested: {disk_size_gb} GB). Only expansion is supported."
+                        error_type=ErrorType.INVALID_PARAMETER, 
+                        message=f"Cannot shrink disk (Current: {current_size_gb} GB, Requested: {disk_size_gb} GB). Only expansion is supported.",
+                        suggestion="Provide a size larger than current disk size"
                     )
                 elif disk_size_gb > current_size_gb:
                     disk_spec = vim.vm.device.VirtualDeviceSpec()
@@ -749,7 +750,7 @@ class VSphereClient:
                         break
                 
                 if not nic:
-                    return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, "No network adapter found on VM to reconfigure")
+                    return None, MCPError(error_type=ErrorType.RESOURCE_NOT_FOUND, message="No network adapter found on VM to reconfigure", suggestion="Check VM configuration")
 
                 # 复用 _create_network_spec 的逻辑来查找网络并构建 BackingInfo
                 # 注意：这里我们临时传入 vm 作为 template 参数，因为 _create_network_spec 只需要 helper 功能
@@ -778,8 +779,9 @@ class VSphereClient:
 
                 if not target_network:
                     return None, MCPError(
-                        ErrorType.RESOURCE_NOT_FOUND, 
-                        f"Network '{network_name}' not found"
+                        error_type=ErrorType.RESOURCE_NOT_FOUND, 
+                        message=f"Network '{network_name}' not found",
+                        suggestion="Use describeNetworks to list available networks"
                     )
 
                 nic_spec = vim.vm.device.VirtualDeviceSpec()
@@ -802,7 +804,7 @@ class VSphereClient:
                 changed = True
 
             if not changed:
-                return None, MCPError(ErrorType.MISSING_PARAMETER, "No configuration changes specified")
+                return None, MCPError(error_type=ErrorType.MISSING_PARAMETER, message="No configuration changes specified", suggestion="Specify at least one parameter to change")
 
             if device_changes:
                 config_spec.deviceChange = device_changes
@@ -974,11 +976,11 @@ def get_vsphere_client() -> Tuple[Optional[VSphereClient], Optional[MCPError]]:
     port = int(os.getenv("VSPHERE_PORT", "443"))
     
     if not host or not username or not password:
-        return None, MCPError(
-            error_type=ErrorType.MISSING_PARAMETER,
-            message="vSphere 连接配置不完整",
-            suggestion="请设置环境变量: VSPHERE_HOST, VSPHERE_USERNAME, VSPHERE_PASSWORD"
-        )
+            return None, MCPError(
+                error_type=ErrorType.MISSING_PARAMETER,
+                message="vSphere 连接配置不完整",
+                suggestion="请设置环境变量: VSPHERE_HOST, VSPHERE_USERNAME, VSPHERE_PASSWORD"
+            )
     
     # 如果客户端不存在或连接已断开，重新连接
     if _vsphere_client is None or not _vsphere_client.is_connected():
