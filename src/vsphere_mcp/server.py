@@ -27,6 +27,8 @@ from .tools import (
     describe_networks,
     describe_vms,
     create_vm_from_template,
+    reconfigure_vm,
+    get_vm_power_state,
 )
 
 
@@ -96,6 +98,12 @@ class ToolRegistry:
             annotations={"title": "查询虚拟机", "readOnlyHint": True}
         )(describe_vms)
 
+        self.mcp.tool(
+            name="getVMPowerState",
+            description="查询虚拟机电源状态 (用于检查是否可配置)",
+            annotations={"title": "查询电源状态", "readOnlyHint": True}
+        )(get_vm_power_state)
+
     def _register_lifecycle_tools(self):
         """注册生命周期管理工具"""
         self.mcp.tool(
@@ -103,6 +111,12 @@ class ToolRegistry:
             description="从模板创建虚拟机 (支持自定义 CPU、内存、网络)",
             annotations={"title": "创建虚拟机 (从模板)", "readOnlyHint": False, "destructiveHint": False}
         )(create_vm_from_template)
+
+        self.mcp.tool(
+            name="reconfigureVM",
+            description="重新配置虚拟机 (支持 CPU/内存/磁盘扩容/网络变更)",
+            annotations={"title": "重新配置虚拟机", "readOnlyHint": False, "destructiveHint": False}
+        )(reconfigure_vm)
 
 
 @asynccontextmanager

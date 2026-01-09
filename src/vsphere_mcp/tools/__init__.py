@@ -11,10 +11,12 @@ from .query import (
     describe_resource_pools,
     describe_networks,
     describe_vms,
+    get_vm_power_state,
 )
 
 from .lifecycle import (
     create_vm_from_template,
+    reconfigure_vm,
 )
 
 __all__ = [
@@ -26,6 +28,8 @@ __all__ = [
     "describe_resource_pools",
     "describe_networks",
     "describe_vms",
+    "get_vm_power_state",
     # 生命周期工具
     "create_vm_from_template",
+    "reconfigure_vm",
 ]

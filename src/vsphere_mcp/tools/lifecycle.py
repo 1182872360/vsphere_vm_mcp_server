@@ -102,3 +102,71 @@ async def create_vm_from_template(
         data=result_data,
         request_id=task_id
     )
+
+
+async def reconfigure_vm(
+    vm_name: str = Field(description="虚拟机名称"),
+    cpu: Optional[int] = Field(default=None, description="新的 CPU 核数"),
+    memory_mb: Optional[int] = Field(default=None, description="新的内存大小 (MB)"),
+    disk_size_gb: Optional[int] = Field(default=None, description="新的磁盘大小 (GB)，仅允许扩容"),
+    network_name: Optional[str] = Field(default=None, description="新的网络名称 (修改第一块网卡)")
+) -> MCPResult:
+    """
+    重新配置虚拟机 (修改 CPU/内存/磁盘/网络)
+
+    注意：
+    1. 虚拟机必须处于 **关机状态** (Powered Off) 才能进行变更。
+    2. 磁盘仅支持 **扩容** (Increase Size)，不支持缩容。
+    3. 至少指定一项配置变更。
+    """
+    # 参数验证
+    pass  # Pydantic has validated types, logical validation below
+
+    if all(arg is None for arg in [cpu, memory_mb, disk_size_gb, network_name]):
+        return MCPResult(
+            success=False, 
+            error="Please specify at least one configuration to change: cpu, memory_mb, disk_size_gb, or network_name"
+        )
+
+    if error := validate_cpu_memory(cpu, memory_mb):
+        return MCPResult(success=False, error=error)
+
+    # 获取客户端
+    client, error = get_vsphere_client()
+    if error:
+        return MCPResult(success=False, error=error)
+
+    # 执行重新配置
+    task_id, error = client.reconfigure_vm(
+        vm_name=vm_name,
+        cpu=cpu,
+        memory_mb=memory_mb,
+        disk_size_gb=disk_size_gb,
+        network_name=network_name
+    )
+
+    if error:
+        return MCPResult(success=False, error=error)
+
+    result_data = {
+        "vm_name": vm_name,
+        "status": "reconfiguration_started",
+        "message": f"虚拟机 '{vm_name}' 配置更新请求已提交",
+        "task_id": task_id,
+        "details": {}
+    }
+
+    if cpu:
+        result_data["details"]["cpu"] = cpu
+    if memory_mb:
+        result_data["details"]["memory_mb"] = memory_mb
+    if disk_size_gb:
+        result_data["details"]["disk_size_gb"] = disk_size_gb
+    if network_name:
+        result_data["details"]["network_name"] = network_name
+
+    return MCPResult(
+        success=True,
+        data=result_data,
+        request_id=task_id
+    )

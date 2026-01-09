@@ -123,3 +123,25 @@ async def describe_vms(
     except Exception as e:
         logger.error(f"查询虚拟机列表失败: {e}")
         return MCPResult(success=False, error=parse_vsphere_error(e, "describe_vms"))
+
+
+async def get_vm_power_state(
+    vm_name: str = Field(description="虚拟机名称")
+) -> MCPResult:
+    """查询虚拟机的电源状态 (poweredOn/poweredOff/suspended)"""
+    client, error = get_vsphere_client()
+    if error:
+        return MCPResult(success=False, error=error)
+    
+    state, error = client.get_vm_power_state(vm_name)
+    if error:
+        return MCPResult(success=False, error=error)
+    
+    return MCPResult(
+        success=True, 
+        data={
+            "vm_name": vm_name,
+            "power_state": state,
+            "can_reconfigure": state == "poweredOff"
+        }
+    )

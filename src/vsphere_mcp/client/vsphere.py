@@ -486,6 +486,185 @@ class VSphereClient:
         except Exception as e:
             return None, parse_vsphere_error(e, "clone_vm")
 
+    def get_vm_power_state(self, vm_name: str) -> Tuple[Optional[str], Optional[MCPError]]:
+        """获取虚拟机的电源状态"""
+        if not self.is_connected():
+            return None, MCPError(ErrorType.CONNECTION_ERROR, "Not connected to vSphere")
+
+        try:
+            vm = self.find_object_by_name(vm_name, vim.VirtualMachine)
+            if not vm:
+                return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, f"Virtual machine '{vm_name}' not found")
+            
+            return str(vm.runtime.powerState), None
+        except Exception as e:
+            logger.error(f"Error getting power state for VM '{vm_name}': {e}")
+            return None, parse_vsphere_error(e, "get_vm_power_state")
+
+    def reconfigure_vm(
+        self,
+        vm_name: str,
+        cpu: Optional[int] = None,
+        memory_mb: Optional[int] = None,
+        disk_size_gb: Optional[int] = None,
+        network_name: Optional[str] = None
+    ) -> Tuple[Optional[str], Optional[MCPError]]:
+        """
+        重新配置虚拟机 (修改 CPU/内存/磁盘/网络)
+        注意：虚拟机必须处于关机状态
+        
+        Args:
+            vm_name: 虚拟机名称
+            cpu: 新的 CPU 核数
+            memory_mb: 新的内存大小 (MB)
+            disk_size_gb: 新的磁盘大小 (GB)，仅允许扩容
+            network_name: 新的网络名称 (修改第一块网卡)
+            
+        Returns:
+            Tuple[task_id, error_message]
+        """
+        if not self.is_connected():
+            return None, MCPError(ErrorType.CONNECTION_ERROR, "Not connected to vSphere")
+
+        try:
+            # 1. 查找虚拟机
+            vm = self.find_object_by_name(vm_name, vim.VirtualMachine)
+            if not vm:
+                return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, f"Virtual machine '{vm_name}' not found")
+
+            # 2. 检查电源状态 (必须关机)
+            if vm.runtime.powerState != vim.VirtualMachine.PowerState.poweredOff:
+                return None, MCPError(
+                    ErrorType.INVALID_OPERATION, 
+                    f"VM '{vm_name}' is currently {vm.runtime.powerState}. It must be powered off to reconfigure.",
+                    suggestion="Please power off the VM first. You can use 'getVMPowerState' to check the status."
+                )
+
+            # 3. 创建配置规格
+            config_spec = vim.vm.ConfigSpec()
+            changed = False
+            device_changes = []
+
+            # CPU & Memory
+            if cpu is not None:
+                if cpu <= 0:
+                    return None, MCPError(ErrorType.INVALID_PARAMETER, "CPU count must be positive")
+                config_spec.numCPUs = cpu
+                changed = True
+            
+            if memory_mb is not None:
+                if memory_mb <= 0:
+                    return None, MCPError(ErrorType.INVALID_PARAMETER, "Memory size must be positive")
+                config_spec.memoryMB = int(memory_mb)
+                changed = True
+
+            # Disk Expansion
+            if disk_size_gb is not None:
+                if disk_size_gb <= 0:
+                    return None, MCPError(ErrorType.INVALID_PARAMETER, "Disk size must be positive")
+                
+                # 找到第一个磁盘
+                disk = None
+                for device in vm.config.hardware.device:
+                    if isinstance(device, vim.vm.device.VirtualDisk):
+                        disk = device
+                        break
+                
+                if not disk:
+                     return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, "No virtual disk found on VM to expand")
+                
+                current_size_gb = disk.capacityInKB / (1024 * 1024)
+                if disk_size_gb < current_size_gb:
+                    return None, MCPError(
+                        ErrorType.INVALID_PARAMETER, 
+                        f"Cannot shrink disk (Current: {current_size_gb} GB, Requested: {disk_size_gb} GB). Only expansion is supported."
+                    )
+                elif disk_size_gb > current_size_gb:
+                    disk_spec = vim.vm.device.VirtualDeviceSpec()
+                    disk_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+                    disk_spec.device = disk
+                    disk_spec.device.capacityInKB = int(disk_size_gb * 1024 * 1024)
+                    device_changes.append(disk_spec)
+                    changed = True
+
+            # Network Change
+            if network_name:
+                # 找到第一块网卡
+                nic = None
+                for device in vm.config.hardware.device:
+                    if isinstance(device, vim.vm.device.VirtualEthernetCard):
+                        nic = device
+                        break
+                
+                if not nic:
+                    return None, MCPError(ErrorType.RESOURCE_NOT_FOUND, "No network adapter found on VM to reconfigure")
+
+                # 复用 _create_network_spec 的逻辑来查找网络并构建 BackingInfo
+                # 注意：这里我们临时传入 vm 作为 template 参数，因为 _create_network_spec 只需要 helper 功能
+                # 或者我们可以重构 _create_network_spec，但为了简单，我们直接在这里实现查找网络的逻辑
+                
+                # 查找网络
+                target_network = None
+                content = self.get_content()
+                
+                # 尝试标准网络
+                container = content.viewManager.CreateContainerView(content.rootFolder, [vim.Network], True)
+                for net in container.view:
+                    if net.name == network_name:
+                        target_network = net
+                        break
+                container.Destroy()
+                
+                # 尝试分布式端口组
+                if not target_network:
+                    container = content.viewManager.CreateContainerView(content.rootFolder, [vim.dvs.DistributedVirtualPortgroup], True)
+                    for pg in container.view:
+                        if pg.name == network_name:
+                            target_network = pg
+                            break
+                    container.Destroy()
+
+                if not target_network:
+                    return None, MCPError(
+                        ErrorType.RESOURCE_NOT_FOUND, 
+                        f"Network '{network_name}' not found"
+                    )
+
+                nic_spec = vim.vm.device.VirtualDeviceSpec()
+                nic_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+                nic_spec.device = nic
+                
+                # 设置 Backing
+                if isinstance(target_network, vim.dvs.DistributedVirtualPortgroup):
+                    dvs_port_connection = vim.dvs.PortConnection()
+                    dvs_port_connection.portgroupKey = target_network.key
+                    dvs_port_connection.switchUuid = target_network.config.distributedVirtualSwitch.uuid
+                    nic.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+                    nic.backing.port = dvs_port_connection
+                else:
+                    nic.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+                    nic.backing.network = target_network
+                    nic.backing.deviceName = network_name
+                
+                device_changes.append(nic_spec)
+                changed = True
+
+            if not changed:
+                return None, MCPError(ErrorType.MISSING_PARAMETER, "No configuration changes specified")
+
+            if device_changes:
+                config_spec.deviceChange = device_changes
+
+            # 3. 创建重新配置任务
+            task = vm.ReconfigVM_Task(spec=config_spec)
+            
+            # 返回任务 ID (格式: task-123)
+            return f"task-{task._moId}", None
+
+        except Exception as e:
+            logger.error(f"Error reconfiguring VM '{vm_name}': {e}")
+            return None, parse_vsphere_error(e, "reconfigure_vm")
+
     # =========================================================================
     # 辅助方法
     # =========================================================================
