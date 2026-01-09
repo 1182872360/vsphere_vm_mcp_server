@@ -12,10 +12,10 @@ requires-python = ">=3.13"
 dependencies = ["mcp[cli]>=1.25.0", "pydantic>=2.12.5", "pyvmomi>=8.0.0"]
 
 [project.scripts]
-vsphere-vm-mcp-server = "main:run_server"
+vsphere-vm-mcp-server = "vsphere_mcp.server:run_server"
 
 [tool.uv]
 package = true
 
 [tool.hatch.build.targets.wheel]
-include = ["main.py"]
+packages = ["src/vsphere_mcp"]
