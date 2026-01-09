@@ -64,6 +64,30 @@ LOG_LEVEL=DEBUG SERVER_PORT=9000 uv run vsphere-vm-mcp-server
 | `createVMFromTemplate` | 从模板创建虚拟机 | `vm_name`, `template_name`, `cluster_name` | `cpu`, `memory_mb`, `network_name`, `folder_name`, `resource_pool_name`, `(Customization)`, `ip_address`, `password` |
 | `reconfigureVM` | 重新配置虚拟机 | `vm_name` | `cpu`, `memory_mb`, `disk_size_gb`, `network_name` |
 
+### 高级功能：Guest OS 自定义
+
+`createVMFromTemplate` 工具支持并在创建虚拟机时自动配置操作系统 (Guest Customization)。
+
+**功能特性**：
+1. **自动系统识别**：自动根据模板检测 Guest OS 类型 (Windows/Linux)，无需手动指定。
+2. **网络配置**：支持设置静态 IP、子网掩码、网关和 DNS。
+3. **身份配置**：支持设置主机名 (Hostname) 和加入域 (Domain)。
+4. **凭据配置** (仅 Windows)：支持设置 Administrator 密码 (通过 Sysprep)。
+   * *注意：Linux 模板通常需要 Cloud-Init 或其他机制来设置 Root 密码，本工具主要通过 vSphere API 配置网络和主机名。*
+
+**使用示例**：
+```json
+{
+  "vm_name": "app-server-01",
+  "template_name": "ubuntu-22.04-template",
+  "cluster_name": "Production-Cluster",
+  "ip_address": "192.168.10.50",
+  "subnet_mask": "255.255.255.0",
+  "gateway": "192.168.10.1",
+  "hostname": "app-01"
+}
+```
+
 ## 📦 项目结构
 
 ```
